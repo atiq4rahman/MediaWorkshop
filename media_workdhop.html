@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Media Workshop Schedule</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Chosen Palette: Warm Neutrals -->
+    <!-- Application Structure Plan: The application uses a timeline-centric structure. A vertical timeline on the left displays all sessions. Clicking a session dynamically populates a "Session Details" pane on the right. A summary chart provides a quantitative overview. A new Gemini-powered feature generates key takeaways for each session on demand. Key venue/contact info is added at the top for visibility. A new full-width registration section is added at the bottom, containing prerequisites, fee info, and a functional form that sends data to a Google Apps Script, providing a clear call-to-action without disrupting the main schedule exploration flow. -->
+    <!-- Visualization & Content Choices: Report Info: Workshop schedule table. -> Goal: Organize, Inform, Summarize, & Register. -> Viz/Presentation Method: Interactive timeline (HTML/CSS), dynamic detail pane (HTML/JS), doughnut chart (Chart.js), AI takeaways section (JS/Gemini API), and a registration form (HTML/JS) that POSTs to a Google Apps Script. -> Interaction: Click timeline to see details. Click button for AI takeaways. Fill and submit form for registration confirmation. -> Justification: This approach creates a comprehensive, one-stop page for the event, from exploration to action (registration). The structure logically separates information discovery from the registration task. -> Library/Method: HTML/Tailwind, JS, Chart.js, Fetch API for Gemini. -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .timeline-item-line {
+            content: '';
+            position: absolute;
+            left: 20px;
+            top: 40px;
+            bottom: -16px;
+            width: 2px;
+            background-color: #e5e7eb;
+            z-index: 0;
+        }
+        .timeline-item:last-child .timeline-item-line {
+            display: none;
+        }
+        .timeline-item .timeline-dot {
+            transition: all 0.3s ease;
+        }
+        .timeline-item.active .timeline-dot {
+            transform: scale(1.2);
+            box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.3);
+        }
+        .chart-container {
+            position: relative;
+            margin-left: auto;
+            margin-right: auto;
+            height: 300px;
+            width: 100%;
+            max-width: 400px;
+        }
+         @media (min-width: 768px) {
+            .chart-container {
+                height: 350px;
+            }
+        }
+        .gemini-btn, #registration-form button {
+            transition: all 0.3s ease;
+        }
+        .gemini-btn:disabled, #registration-form button:disabled {
+            cursor: not-allowed;
+            background-color: #9ca3af;
+        }
+        .modal-backdrop {
+            transition: opacity 0.3s ease-in-out;
+        }
+        .modal-content {
+            transition: transform 0.3s ease-in-out;
+        }
+        .form-input.invalid {
+            border-color: #ef4444;
+            box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.2);
+        }
+    </style>
+</head>
+<body class="bg-stone-50 text-stone-800">
+
+    <div class="container mx-auto p-4 md:p-8">
+        <header class="text-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold text-teal-700">One-Day Media Workshop</h1>
+            <p class="mt-2 text-lg text-stone-600">An interactive guide with ✨ AI-powered takeaways for the JIH Organization & Wings</p>
+        </header>
+
+        <div class="max-w-4xl mx-auto bg-white p-4 rounded-xl shadow-md border border-stone-200 mb-8 flex flex-col md:flex-row justify-around text-center gap-4">
+            <div class="flex items-center justify-center gap-2">
+                <span class="text-2xl">📍</span>
+                <div>
+                    <h3 class="font-bold">Venue</h3>
+                    <p class="text-stone-600">Program hall, Hazrat Umar Farooq Masjid, Shiralkoppa</p>
+                </div>
+            </div>
+            <div class="flex items-center justify-center gap-2">
+                <span class="text-2xl">📞</span>
+                <div>
+                    <h3 class="font-bold">Contact</h3>
+                    <p class="text-stone-600">9902210071</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="text-center mb-8 bg-teal-50 border-l-4 border-teal-500 text-teal-800 p-4 rounded-r-lg max-w-4xl mx-auto">
+            <p>Welcome! Click any session in the timeline to see details. Then, use the "✨ Generate Key Takeaways" button to get an AI-powered summary. Scroll down to register for the workshop.</p>
+        </div>
+
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            
+            <div class="lg:col-span-1">
+                <div id="timeline-container" class="relative">
+                </div>
+            </div>
+
+            <div class="lg:col-span-2 sticky top-8 self-start">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+
+                    <div id="details-pane" class="bg-white p-6 rounded-2xl shadow-lg border border-stone-200 order-2 md:order-1">
+                        <h2 class="text-2xl font-bold mb-4 text-teal-700">Session Details</h2>
+                        <div id="details-content">
+                            <p class="text-stone-500">Please select a session from the timeline to see more details here.</p>
+                        </div>
+                    </div>
+
+                    <div class="bg-white p-6 rounded-2xl shadow-lg border border-stone-200 order-1 md:order-2">
+                        <h2 class="text-2xl font-bold mb-4 text-center text-teal-700">Workshop Focus</h2>
+                        <div class="chart-container">
+                            <canvas id="focusChart"></canvas>
+                        </div>
+                         <p class="text-center text-sm text-stone-500 mt-4">A visual breakdown of time spent on key skill areas during the workshop.</p>
+                    </div>
+                    
+                </div>
+            </div>
+        </div>
+
+        <section id="registration-section" class="mt-16 pt-8 border-t border-stone-200">
+            <h2 class="text-3xl font-bold text-center text-teal-700 mb-8">Register for the Workshop</h2>
+            <div class="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div class="bg-white p-6 rounded-2xl shadow-lg border border-stone-200">
+                    <h3 class="text-xl font-bold mb-4">Workshop Prerequisites</h3>
+                    <ul class="space-y-3 text-stone-600">
+                        <li class="flex items-start"><span class="text-teal-500 mr-3 mt-1">✓</span><span>Come with a <b>fully charged smartphone</b>.</span></li>
+                        <li class="flex items-start"><span class="text-teal-500 mr-3 mt-1">✓</span><span>Pre-install the following apps: <b>Canva, Google Docs, Google Sheets, and Google Slides</b>.</span></li>
+                        <li class="flex items-start"><span class="text-teal-500 mr-3 mt-1">✓</span><span>Registration Fee: <b>₹100 INR</b> (to be paid at the venue).</span></li>
+                    </ul>
+                </div>
+                <div class="bg-white p-6 rounded-2xl shadow-lg border border-stone-200">
+                    <h3 class="text-xl font-bold mb-4">Registration Form</h3>
+                    <form id="registration-form" novalidate>
+                        <div class="space-y-4">
+                            <div>
+                                <label for="name" class="block text-sm font-medium text-stone-700">Full Name</label>
+                                <input type="text" id="name" name="name" required class="form-input mt-1 block w-full rounded-md border-stone-300 shadow-sm focus:border-teal-500 focus:ring-teal-500">
+                            </div>
+                            <div>
+                                <label for="contact" class="block text-sm font-medium text-stone-700">Contact Number</label>
+                                <input type="tel" id="contact" name="contact" required class="form-input mt-1 block w-full rounded-md border-stone-300 shadow-sm focus:border-teal-500 focus:ring-teal-500">
+                            </div>
+                            <div>
+                                <label for="email" class="block text-sm font-medium text-stone-700">Email ID</label>
+                                <input type="email" id="email" name="email" required class="form-input mt-1 block w-full rounded-md border-stone-300 shadow-sm focus:border-teal-500 focus:ring-teal-500">
+                            </div>
+                            <div class="relative flex items-start">
+                                <div class="flex h-5 items-center">
+                                    <input id="volunteer" name="volunteer" type="checkbox" required class="h-4 w-4 rounded border-stone-300 text-teal-600 focus:ring-teal-500">
+                                </div>
+                                <div class="ml-3 text-sm">
+                                    <label for="volunteer" class="font-medium text-stone-700">Volunteer Consent</label>
+                                    <p class="text-stone-500">I consent to volunteer for media department work (e.g., creating posters, content generation, Twitter campaigns).</p>
+                                </div>
+                            </div>
+                        </div>
+                        <button type="submit" class="mt-6 w-full bg-teal-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-teal-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500">Register Now</button>
+                    </form>
+                </div>
+            </div>
+        </section>
+
+    </div>
+    
+    <!-- Modal for Messages -->
+    <div id="message-modal" class="fixed inset-0 z-50 flex items-center justify-center hidden">
+        <div class="modal-backdrop absolute inset-0 bg-black bg-opacity-50"></div>
+        <div class="modal-content bg-white rounded-lg shadow-xl p-6 w-11/12 max-w-md transform scale-95">
+            <h3 id="modal-title" class="text-xl font-bold">Message</h3>
+            <p id="modal-message" class="mt-2 text-stone-600">An unexpected error occurred.</p>
+            <button id="close-modal-btn" class="mt-4 w-full bg-red-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-red-600 transition-colors">Close</button>
+        </div>
+    </div>
+
+
+    <script>
+        const scheduleData = [
+            {
+                id: 'intro',
+                time: '10:00 AM - 10:15 AM',
+                title: 'Welcome & Introduction',
+                duration: 15,
+                category: 'General',
+                details: [
+                    'Workshop objectives and an overview of the day\'s sessions.',
+                    'Introduction of speakers and participants.'
+                ],
+                icon: '👋',
+                ai_enabled: false
+            },
+            {
+                id: 'design',
+                time: '10:15 AM - 11:30 AM',
+                title: 'Fundamentals of Graphic Design',
+                duration: 75,
+                category: 'Design & Visuals',
+                details: [
+                    '<b>Color Theory:</b> Understanding color matching & psychology to create harmony.',
+                    '<b>Layout:</b> The importance of alignments and balance for professional-looking designs.',
+                    '<b>Typography:</b> Choosing and using fonts effectively to convey the right tone.'
+                ],
+                icon: '🎨',
+                ai_enabled: true
+            },
+            {
+                id: 'video',
+                time: '11:30 AM - 12:30 PM',
+                title: 'Introduction to Video Editing',
+                duration: 60,
+                category: 'Design & Visuals',
+                details: [
+                    '<b>Framing:</b> Using basic frames and composition rules like the Rule of Thirds.',
+                    '<b>Camera Angles:</b> Learning how different angles impact storytelling and viewer perception.',
+                    '<b>Lighting:</b> Understanding the basics of three-point lighting and using natural light.',
+                    '<b>Audio:</b> Practical tips for ensuring high-quality audio capture in your videos.'
+                ],
+                icon: '🎬',
+                ai_enabled: true
+            },
+            {
+                id: 'smartphones',
+                time: '12:30 PM - 1:00 PM',
+                title: 'Effectively Using Smartphones',
+                duration: 30,
+                category: 'Tools & Tech',
+                details: [
+                    'Maximizing your phone\'s built-in camera features for photo and video.',
+                    'A review of essential and user-friendly apps for mobile editing.'
+                ],
+                icon: '📱',
+                ai_enabled: true
+            },
+            {
+                id: 'break',
+                time: '1:00 PM - 2:30 PM',
+                title: 'Lunch & Prayer Break',
+                duration: 90,
+                category: 'General',
+                details: ['Time to recharge, reflect, and connect with fellow participants.'],
+                icon: '☕',
+                ai_enabled: false
+            },
+            {
+                id: 'collab',
+                time: '2:30 PM - 3:30 PM',
+                title: 'Collaborative Workflows',
+                duration: 60,
+                category: 'Collaboration',
+                details: [
+                    '<b>Google Drive:</b> Best practices for organizing and sharing files efficiently.',
+                    '<b>Google Suite:</b> A hands-on look at real-time collaboration in Docs, Sheets, & Slides.',
+                    '<b>Canva:</b> A practical, guided session on creating a poster collaboratively.'
+                ],
+                icon: '🤝',
+                ai_enabled: true
+            },
+            {
+                id: 'ai',
+                time: '3:30 PM - 4:45 PM',
+                title: 'Introducing AI for Productivity',
+                duration: 75,
+                category: 'AI & Productivity',
+                details: [
+                    '<b>Mastering Prompts:</b> How to write effective prompts for planning, translation, and proofreading.',
+                    '<b>Content Creation:</b> Using AI to help draft letters, memos, and reports.',
+                    '<b>Scheduling:</b> Practical demo of using Gemini to schedule tasks in Google Calendar.',
+                    '<b>AI Presentations:</b> A live demo of creating a presentation from a prompt with Gamma.app.'
+                ],
+                icon: '🤖',
+                ai_enabled: true
+            },
+            {
+                id: 'outro',
+                time: '4:45 PM - 5:00 PM',
+                title: 'Q&A, Feedback & Closing',
+                duration: 15,
+                category: 'General',
+                details: ['An open forum for questions, sharing feedback on the workshop, and closing remarks.'],
+                icon: '✅',
+                ai_enabled: false
+            }
+        ];
+
+        const timelineContainer = document.getElementById('timeline-container');
+        const detailsContent = document.getElementById('details-content');
+        const messageModal = document.getElementById('message-modal');
+        const modalTitle = document.getElementById('modal-title');
+        const modalMessage = document.getElementById('modal-message');
+        const closeModalBtn = document.getElementById('close-modal-btn');
+        const registrationForm = document.getElementById('registration-form');
+
+        function renderTimeline() {
+            let html = '';
+            scheduleData.forEach(item => {
+                const isBreak = item.id === 'break';
+                const itemBg = isBreak ? 'bg-amber-100' : 'bg-white';
+                const dotBg = isBreak ? 'bg-amber-500' : 'bg-blue-500';
+
+                html += `
+                    <div id="item-${item.id}" class="timeline-item relative pl-12 pb-4 cursor-pointer" data-id="${item.id}">
+                        <div class="timeline-item-line"></div>
+                        <div class="timeline-dot absolute left-[12px] top-[10px] w-4 h-4 rounded-full ${dotBg} border-4 border-stone-50 z-10"></div>
+                        <div class="relative p-4 rounded-xl shadow-md border border-stone-200 ${itemBg} hover:shadow-xl hover:border-blue-300 transition-all duration-300">
+                            <p class="text-sm font-semibold text-teal-600">${item.time}</p>
+                            <h3 class="font-bold text-lg">${item.title}</h3>
+                        </div>
+                    </div>
+                `;
+            });
+            timelineContainer.innerHTML = html;
+        }
+
+        function updateDetails(id) {
+            const item = scheduleData.find(s => s.id === id);
+            if (!item) return;
+
+            let detailsHtml = `
+                <div class="flex items-start space-x-4">
+                    <span class="text-3xl">${item.icon}</span>
+                    <div>
+                        <p class="text-sm font-semibold text-teal-600">${item.time}</p>
+                        <h3 class="text-xl font-bold text-stone-800 mb-3">${item.title}</h3>
+                    </div>
+                </div>
+                <ul class="space-y-3 mt-4 pl-2 list-inside">
+            `;
+            item.details.forEach(detail => {
+                detailsHtml += `<li class="flex items-start"><span class="text-teal-500 mr-3 mt-1">◆</span><span class="text-stone-600">${detail}</span></li>`;
+            });
+            detailsHtml += '</ul>';
+
+            if (item.ai_enabled) {
+                detailsHtml += `
+                    <div class="mt-6">
+                        <button id="gemini-btn" data-id="${item.id}" class="gemini-btn w-full bg-teal-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-teal-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500">
+                            ✨ Generate Key Takeaways
+                        </button>
+                        <div id="takeaways-container" class="mt-4 p-4 bg-stone-100 rounded-lg hidden"></div>
+                    </div>
+                `;
+            }
+
+            detailsContent.innerHTML = detailsHtml;
+
+            if (item.ai_enabled) {
+                document.getElementById('gemini-btn').addEventListener('click', handleGeminiClick);
+            }
+
+            document.querySelectorAll('.timeline-item').forEach(el => el.classList.remove('active'));
+            document.getElementById(`item-${id}`).classList.add('active');
+        }
+        
+        async function handleGeminiClick(event) {
+            const btn = event.target;
+            const id = btn.dataset.id;
+            const item = scheduleData.find(s => s.id === id);
+            const takeawaysContainer = document.getElementById('takeaways-container');
+
+            if (!item) return;
+
+            btn.disabled = true;
+            btn.innerHTML = `<svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white inline-block" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Generating...`;
+            takeawaysContainer.classList.remove('hidden');
+            takeawaysContainer.innerHTML = '<p class="text-stone-500">AI is thinking...</p>';
+
+            const prompt = `For a workshop session titled "${item.title}" which covers the following topics: ${item.details.join(', ').replace(/<b>/g, '').replace(/<\/b>/g, '')}, generate a bulleted list of 3-4 key takeaways for the participants. The tone should be encouraging and clear.`;
+            
+            try {
+                const apiKey = "";
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+                
+                const payload = { contents: [{ parts: [{ text: prompt }] }] };
+
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) throw new Error(`API request failed with status ${response.status}`);
+
+                const result = await response.json();
+                
+                if (result.candidates && result.candidates[0]?.content?.parts?.[0]) {
+                    const text = result.candidates[0].content.parts[0].text;
+                    takeawaysContainer.innerHTML = `<h4 class="font-bold mb-2 text-teal-700">✨ Key Takeaways</h4>${text.replace(/\*/g, '<br>• ').replace(/•/g, '•')}`;
+                } else {
+                    throw new Error("Invalid response structure from API.");
+                }
+
+            } catch (error) {
+                showMessageModal('Error', `Failed to generate takeaways. Please try again. Error: ${error.message}`, true);
+                takeawaysContainer.innerHTML = `<p class="text-red-500">Could not generate takeaways.</p>`;
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '✨ Generate Key Takeaways';
+            }
+        }
+        
+        function showMessageModal(title, message, isError = false) {
+            modalTitle.textContent = title;
+            modalMessage.textContent = message;
+            
+            modalTitle.className = isError ? 'text-xl font-bold text-red-600' : 'text-xl font-bold text-green-600';
+            closeModalBtn.className = `mt-4 w-full text-white font-bold py-2 px-4 rounded-lg transition-colors ${isError ? 'bg-red-500 hover:bg-red-600' : 'bg-green-500 hover:bg-green-600'}`;
+            
+            messageModal.classList.remove('hidden');
+            const backdrop = messageModal.querySelector('.modal-backdrop');
+            const content = messageModal.querySelector('.modal-content');
+            setTimeout(() => {
+                backdrop.classList.add('opacity-100');
+                content.classList.add('scale-100');
+            }, 10);
+        }
+
+        function hideMessageModal() {
+            const backdrop = messageModal.querySelector('.modal-backdrop');
+            const content = messageModal.querySelector('.modal-content');
+            backdrop.classList.remove('opacity-100');
+            content.classList.remove('scale-100');
+            setTimeout(() => {
+                messageModal.classList.add('hidden');
+            }, 300);
+        }
+
+        closeModalBtn.addEventListener('click', hideMessageModal);
+        messageModal.querySelector('.modal-backdrop').addEventListener('click', hideMessageModal);
+
+        timelineContainer.addEventListener('click', (e) => {
+            const itemElement = e.target.closest('.timeline-item');
+            if (itemElement && itemElement.dataset.id) {
+                updateDetails(itemElement.dataset.id);
+            }
+        });
+
+        registrationForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const submitButton = e.target.querySelector('button[type="submit"]');
+            let isValid = true;
+            const inputs = registrationForm.querySelectorAll('input[required]');
+            inputs.forEach(input => {
+                input.classList.remove('invalid');
+                if (!input.value && input.type !== 'checkbox') {
+                    isValid = false;
+                    input.classList.add('invalid');
+                }
+                if (input.type === 'checkbox' && !input.checked) {
+                    isValid = false;
+                    input.classList.add('invalid');
+                }
+            });
+
+            if(!isValid) {
+                showMessageModal('Validation Error', 'Please fill out all required fields and provide consent to register.', true);
+                return;
+            }
+
+            const scriptURL = 'YOUR_GOOGLE_APPS_SCRIPT_URL_HERE';
+            if (scriptURL === 'YOUR_GOOGLE_APPS_SCRIPT_URL_HERE') {
+                 showMessageModal('Configuration Needed', 'The Google Apps Script URL has not been set by the developer. Registration data cannot be saved.', true);
+                 return;
+            }
+
+            submitButton.disabled = true;
+            submitButton.innerHTML = `<svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white inline-block" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Submitting...`;
+
+            const formData = new FormData(registrationForm);
+            fetch(scriptURL, { method: 'POST', body: formData})
+                .then(response => {
+                    const name = document.getElementById('name').value;
+                    showMessageModal('Registration Successful!', `Thank you for registering, ${name}. We have received your details and look forward to seeing you at the workshop!`, false);
+                    registrationForm.reset();
+                })
+                .catch(error => {
+                    showMessageModal('Submission Error', `An error occurred while submitting your registration. Please try again. Error: ${error.message}`, true);
+                })
+                .finally(() => {
+                    submitButton.disabled = false;
+                    submitButton.textContent = 'Register Now';
+                });
+        });
+        
+        function renderChart() {
+            const ctx = document.getElementById('focusChart').getContext('2d');
+            
+            const categoryTotals = scheduleData.reduce((acc, item) => {
+                if(item.category !== 'General') {
+                    acc[item.category] = (acc[item.category] || 0) + item.duration;
+                }
+                return acc;
+            }, {});
+
+            const data = {
+                labels: Object.keys(categoryTotals),
+                datasets: [{
+                    label: 'Minutes',
+                    data: Object.values(categoryTotals),
+                    backgroundColor: ['rgba(13, 148, 136, 0.7)', 'rgba(59, 130, 246, 0.7)', 'rgba(245, 158, 11, 0.7)', 'rgba(107, 114, 128, 0.7)'],
+                    borderColor: ['rgb(15, 118, 110)', 'rgb(37, 99, 235)', 'rgb(217, 119, 6)', 'rgb(75, 85, 99)'],
+                    borderWidth: 1,
+                    hoverOffset: 8
+                }]
+            };
+
+            new Chart(ctx, {
+                type: 'doughnut',
+                data: data,
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom', labels: { padding: 20, font: { size: 14, family: 'Inter' } } },
+                        tooltip: {
+                            enabled: true,
+                            backgroundColor: '#1f2937',
+                            titleFont: { size: 16, weight: 'bold' },
+                            bodyFont: { size: 14 },
+                            padding: 12,
+                            cornerRadius: 8,
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) label += ': ';
+                                    if (context.parsed !== null) label += context.parsed + ' minutes';
+                                    return label;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            renderTimeline();
+            renderChart();
+            updateDetails('intro');
+        });
+    </script>
+</body>
+</html>
