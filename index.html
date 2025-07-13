@@ -195,7 +195,7 @@
                     'Introduction of speakers and participants.'
                 ],
                 icon: '👋',
-                ai_enabled: false
+                
             },
             {
                 id: 'design',
@@ -209,7 +209,7 @@
                     '<b>Typography:</b> Choosing and using fonts effectively to convey the right tone.'
                 ],
                 icon: '🎨',
-                ai_enabled: true
+                
             },
             {
                 id: 'video',
@@ -224,7 +224,7 @@
                     '<b>Audio:</b> Practical tips for ensuring high-quality audio capture in your videos.'
                 ],
                 icon: '🎬',
-                ai_enabled: true
+                
             },
             {
                 id: 'smartphones',
@@ -237,7 +237,7 @@
                     'A review of essential and user-friendly apps for mobile editing.'
                 ],
                 icon: '📱',
-                ai_enabled: true
+                
             },
             {
                 id: 'break',
@@ -247,7 +247,7 @@
                 category: 'General',
                 details: ['Time to recharge, reflect, and connect with fellow participants.'],
                 icon: '☕',
-                ai_enabled: false
+                
             },
             {
                 id: 'collab',
@@ -261,7 +261,7 @@
                     '<b>Canva:</b> A practical, guided session on creating a poster collaboratively.'
                 ],
                 icon: '🤝',
-                ai_enabled: true
+                
             },
             {
                 id: 'ai',
@@ -276,7 +276,7 @@
                     '<b>AI Presentations:</b> A live demo of creating a presentation from a prompt with Gamma.app.'
                 ],
                 icon: '🤖',
-                ai_enabled: true
+                
             },
             {
                 id: 'outro',
@@ -286,7 +286,7 @@
                 category: 'General',
                 details: ['An open forum for questions, sharing feedback on the workshop, and closing remarks.'],
                 icon: '✅',
-                ai_enabled: false
+                
             }
         ];
 
@@ -338,73 +338,12 @@
             });
             detailsHtml += '</ul>';
 
-            if (item.ai_enabled) {
-                detailsHtml += `
-                    <div class="mt-6">
-                        <button id="gemini-btn" data-id="${item.id}" class="gemini-btn w-full bg-teal-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-teal-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500">
-                            ✨ Generate Key Takeaways
-                        </button>
-                        <div id="takeaways-container" class="mt-4 p-4 bg-stone-100 rounded-lg hidden"></div>
-                    </div>
-                `;
-            }
-
             detailsContent.innerHTML = detailsHtml;
-
-            if (item.ai_enabled) {
-                document.getElementById('gemini-btn').addEventListener('click', handleGeminiClick);
-            }
 
             document.querySelectorAll('.timeline-item').forEach(el => el.classList.remove('active'));
             document.getElementById(`item-${id}`).classList.add('active');
         }
         
-        async function handleGeminiClick(event) {
-            const btn = event.target;
-            const id = btn.dataset.id;
-            const item = scheduleData.find(s => s.id === id);
-            const takeawaysContainer = document.getElementById('takeaways-container');
-
-            if (!item) return;
-
-            btn.disabled = true;
-            btn.innerHTML = `<svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white inline-block" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Generating...`;
-            takeawaysContainer.classList.remove('hidden');
-            takeawaysContainer.innerHTML = '<p class="text-stone-500">AI is thinking...</p>';
-
-            const prompt = `For a workshop session titled "${item.title}" which covers the following topics: ${item.details.join(', ').replace(/<b>/g, '').replace(/<\/b>/g, '')}, generate a bulleted list of 3-4 key takeaways for the participants. The tone should be encouraging and clear.`;
-            
-            try {
-                const apiKey = "";
-                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
-                
-                const payload = { contents: [{ parts: [{ text: prompt }] }] };
-
-                const response = await fetch(apiUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-
-                if (!response.ok) throw new Error(`API request failed with status ${response.status}`);
-
-                const result = await response.json();
-                
-                if (result.candidates && result.candidates[0]?.content?.parts?.[0]) {
-                    const text = result.candidates[0].content.parts[0].text;
-                    takeawaysContainer.innerHTML = `<h4 class="font-bold mb-2 text-teal-700">✨ Key Takeaways</h4>${text.replace(/\*/g, '<br>• ').replace(/•/g, '•')}`;
-                } else {
-                    throw new Error("Invalid response structure from API.");
-                }
-
-            } catch (error) {
-                showMessageModal('Error', `Failed to generate takeaways. Please try again. Error: ${error.message}`, true);
-                takeawaysContainer.innerHTML = `<p class="text-red-500">Could not generate takeaways.</p>`;
-            } finally {
-                btn.disabled = false;
-                btn.innerHTML = '✨ Generate Key Takeaways';
-            }
-        }
         
         function showMessageModal(title, message, isError = false) {
             modalTitle.textContent = title;
